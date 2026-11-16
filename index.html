@@ -126,16 +126,27 @@ const unb64url = s => {
 };
 const hex = bytes => [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
 
-async function topicFor(passphrase) {
-  const h = await crypto.subtle.digest("SHA-256", enc.encode("tv-message-topic-v1:" + passphrase));
-  return "tvm-" + hex(new Uint8Array(h)).slice(0, 32);
-}
+// a function declaration, not a const: send/test.html evaluates this script and only reaches those
+function toHex(bytes) { return hex(bytes); }
 
-async function deriveKey(secret, topic) {
-  const base = await crypto.subtle.importKey("raw", enc.encode(secret), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: enc.encode("tv-message-v1:" + topic), iterations: 100000, hash: "SHA-256" },
-    base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+/**
+ * What one family passphrase works out to: the key its messages are sealed with, and the name of
+ * its mailbox. Both come out of one slow stretch of the passphrase, so guessing the mailbox costs
+ * as much as guessing the key — the relay holds the mailbox's name by design, and a plain hash of
+ * the passphrase would let anyone with it test billions of guesses a second. The TV app does
+ * exactly this (Crypto.kt, Passphrase.kt); testdata/vector.json is an example both must open.
+ */
+async function family(passphrase) {
+  const base = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveBits"]);
+  const master = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: enc.encode("tv-message-v2"), iterations: 100000, hash: "SHA-256" }, base, 256));
+  const label = s => { const b = enc.encode(s); const out = new Uint8Array(b.length + master.length); out.set(b); out.set(master, b.length); return out; };
+  const keyBytes = await crypto.subtle.digest("SHA-256", label("tv-message-key-v2:"));
+  const topicBytes = await crypto.subtle.digest("SHA-256", label("tv-message-topic-v2:"));
+  return {
+    key: await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]),
+    topic: "tvm-" + hex(new Uint8Array(topicBytes)).slice(0, 32)
+  };
 }
 
 async function seal(plain, key) {
@@ -285,8 +296,9 @@ function parseSetup(hash) {
   async function useSetup(phrase, relay) {
     me.phrase = phrase;
     me.relay = relay || RELAY_DEFAULT;
-    topic = await topicFor(me.phrase);
-    key = await deriveKey(me.phrase, topic);
+    const f = await family(me.phrase);   // one slow stretch, both halves out of it
+    topic = f.topic;
+    key = f.key;
   }
 
   async function send() {

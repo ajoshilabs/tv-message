@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1116">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TV Message">
+<title>TV Message</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' rx='18' fill='%230E1116'/%3E%3Crect x='10' y='34' width='76' height='36' rx='8' fill='%23171B22' stroke='%23ffffff' stroke-opacity='.2'/%3E%3Ccircle cx='26' cy='52' r='8' fill='%23FFC27A'/%3E%3Crect x='42' y='48' width='34' height='6' rx='3' fill='%23fff'/%3E%3Crect x='12' y='66' width='44' height='3' rx='1.5' fill='%237CC4FF'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #ffffff; --panel: #f4f5f7; --ink: #15181e; --dim: #5d6671; --line: #d9dde3;
+    --accent1: #7CC4FF; --accent2: #B9A2FF; --on-accent: #10131A; --bad: #b3261e; --good: #1b7f4b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0E1116; --panel: #171B22; --ink: #E8ECF2; --dim: #9AA4B2; --line: #2A303A; --bad: #ff8a80; --good: #7ce0a8; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    padding: max(20px, env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom));
+    display: flex; justify-content: center;
+  }
+  main { width: 100%; max-width: 480px; }
+  h1 { font-size: 26px; line-height: 1.2; margin: 4px 0 18px; letter-spacing: -0.02em; }
+  p.lede { color: var(--dim); margin: -10px 0 18px; font-size: 15px; }
+  label { display: block; font-size: 14px; font-weight: 600; color: var(--dim); margin: 0 0 6px; }
+  textarea, input[type=text] {
+    width: 100%; font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 14px; resize: none;
+  }
+  textarea { min-height: 120px; }
+  textarea:focus, input[type=text]:focus { outline: 2px solid var(--accent1); outline-offset: 1px; }
+  .count { text-align: right; font-size: 13px; color: var(--dim); margin: 6px 2px 14px; }
+  .count.full { color: var(--bad); }
+  .row { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; }
+  .row input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--accent1); margin: 0; flex: none; }
+  .row .hint { font-size: 13px; color: var(--dim); }
+  button {
+    width: 100%; font: inherit; font-weight: 700; font-size: 18px; color: var(--on-accent);
+    background: linear-gradient(90deg, var(--accent1), var(--accent2));
+    border: 0; border-radius: 14px; padding: 16px; cursor: pointer;
+  }
+  button:disabled { opacity: .45; cursor: default; }
+  button.plain { background: var(--panel); color: var(--ink); border: 1px solid var(--line); font-weight: 600; font-size: 16px; }
+  .status { min-height: 24px; margin: 14px 2px 0; font-size: 15px; color: var(--dim); }
+  .status.ok { color: var(--good); }
+  .status.bad { color: var(--bad); }
+  footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--dim);
+           display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  footer a { color: var(--dim); text-decoration: underline; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font: inherit; font-size: 16px; font-weight: 600; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer; width: auto;
+  }
+  .chip.on { background: linear-gradient(90deg, var(--accent1), var(--accent2)); color: var(--on-accent); border-color: transparent; }
+  .chip.add { font-weight: 500; color: var(--dim); border-style: dashed; }
+  .addrow { display: flex; gap: 8px; margin-top: 10px; }
+  .addrow input { flex: 1; }
+  button.narrow { width: auto; padding: 12px 18px; }
+  .hide { display: none !important; }
+  .err { color: var(--bad); font-size: 14px; margin: 6px 2px 0; min-height: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <!-- first open on a phone, or "Change": the name and the family passphrase, kept on this phone only -->
+  <section id="setup" class="hide">
+    <h1>Message the TV</h1>
+    <p class="lede">Enter your name and the family passphrase. You only do this once on this phone.</p>
+    <label for="name">Your name</label>
+    <input id="name" type="text" autocomplete="name" enterkeyhint="next" placeholder="Priya">
+    <div style="height:14px"></div>
+    <label for="phrase">Family passphrase</label>
+    <input id="phrase" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
+           enterkeyhint="done" placeholder="the same one as on the TV">
+    <div id="setup-err" class="err"></div>
+    <div style="height:14px"></div>
+    <button id="save">Save</button>
+  </section>
+
+  <!-- the everyday screen -->
+  <section id="send" class="hide">
+    <h1>Message the TV</h1>
+    <label for="text">Message</label>
+    <textarea id="text" maxlength="200" enterkeyhint="send" placeholder="Type a message…"
+              autocapitalize="sentences" autocomplete="off"></textarea>
+    <div id="count" class="count">0 / 200</div>
+    <div class="row">
+      <input id="important" type="checkbox">
+      <label for="important" style="margin:0;color:var(--ink);font-size:17px;font-weight:600">Important
+        <span class="hint" style="display:block;font-weight:400">Shows big, in the middle of the screen</span>
+      </label>
+    </div>
+    <label for="people" style="margin-top:4px">From</label>
+    <div id="people" class="chips"></div>
+    <div id="add-person" class="addrow hide">
+      <input id="new-name" type="text" autocomplete="name" enterkeyhint="done" placeholder="Their name">
+      <button id="add-ok" class="plain narrow">Add</button>
+    </div>
+    <div style="height:18px"></div>
+    <button id="go" disabled>Send</button>
+    <div id="status" class="status"></div>
+    <footer>
+      <span>Family passphrase saved on this phone</span>
+      <a href="#" id="change">Change</a>
+    </footer>
+  </section>
+</main>
+
+<script id="core">
+// The family passphrase, the mailbox it leads to, and the sealed message: exactly what the TV app
+// does (Passphrase.kt, Crypto.kt, Wire.kt). testdata/vector.json is the example both must open.
+const RELAY_DEFAULT = "https://ntfy.sh";
+const MAX_TEXT = 200, PHRASE_MIN = 12, PHRASE_MAX = 100;
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64url = s => {
+  if (!/^[A-Za-z0-9_-]+$/.test(s)) throw new Error("not base64url");
+  const b = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(b, c => c.charCodeAt(0));
+};
+const hex = bytes => [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
+
+async function topicFor(passphrase) {
+  const h = await crypto.subtle.digest("SHA-256", enc.encode("tv-message-topic-v1:" + passphrase));
+  return "tvm-" + hex(new Uint8Array(h)).slice(0, 32);
+}
+
+async function deriveKey(secret, topic) {
+  const base = await crypto.subtle.importKey("raw", enc.encode(secret), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: enc.encode("tv-message-v1:" + topic), iterations: 100000, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+
+async function seal(plain, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plain)));
+  const out = new Uint8Array(iv.length + sealed.length);
+  out.set(iv); out.set(sealed, iv.length);
+  return b64url(out);
+}
+
+/** The text inside, or null for anything not sealed with this key. (The TV calls this open.) */
+async function unseal(payload, key) {
+  try {
+    const raw = unb64url(payload);
+    if (raw.length <= 12 + 16) return null;
+    return dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12) }, key, raw.slice(12)));
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Line breaks and runs of spaces become one space; at most 200 characters, never half an emoji. */
+function cleanText(s) {
+  const t = s.replace(/\s+/g, " ").trim();
+  return [...t].slice(0, MAX_TEXT).join("");
+}
+
+/** Trimmed and in one Unicode form, 12 to 100 characters, else null. */
+function cleanPassphrase(s) {
+  const p = s.trim().normalize("NFC");
+  const n = [...p].length;
+  return n >= PHRASE_MIN && n <= PHRASE_MAX ? p : null;
+}
+
+// a plain function declaration, like the others here, so send/test.html can reach it
+function newId() { return hex(crypto.getRandomValues(new Uint8Array(8))); }
+
+const MAX_NAME = 24, MAX_NAMES = 8;
+
+/** A sender's name as it is kept: trimmed, at most 24 characters. "" when there is nothing. */
+function cleanName(s) {
+  return [...(s || "").trim()].slice(0, MAX_NAME).join("");
+}
+
+/**
+ * This phone's senders, newest first, so a phone the family shares remembers everyone who has used
+ * it. The same name in different capitals is the same person; at most eight are kept.
+ */
+function addName(names, name) {
+  const n = cleanName(name);
+  if (!n) return names;
+  return [n, ...names.filter(x => x.toLowerCase() !== n.toLowerCase())].slice(0, MAX_NAMES);
+}
+
+function buildMessage(from, text, important) {
+  return JSON.stringify({ v: 1, id: newId(), t: Date.now(), from: from, text: cleanText(text), important: !!important });
+}
+
+/** A setup link's "#p=<passphrase>&r=<relay>", or null. The part after # never leaves the phone. */
+function parseSetup(hash) {
+  const q = new URLSearchParams((hash || "").replace(/^#/, ""));
+  const p = cleanPassphrase(q.get("p") || "");
+  const r = q.get("r") || RELAY_DEFAULT;
+  if (!p || !/^https?:\/\/[^\s/]+(\/\S*[^\s/])?$/.test(r)) return null;
+  return { p, r };
+}
+</script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const KEY = "tvmessage.v1";
+  // names: everyone who has sent from this phone, newest first; name: whoever is sending now
+  let me = { names: [], name: "", phrase: "", relay: RELAY_DEFAULT };
+  let topic = "", key = null, sending = false, clearStatus = 0;
+
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { return null; } };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(me)); } catch (e) {} };
+
+  function show(which) {
+    $("setup").classList.toggle("hide", which !== "setup");
+    $("send").classList.toggle("hide", which !== "send");
+    if (which === "send") {
+      renderPeople();
+      $("text").focus({ preventScroll: true });
+    } else {
+      $("name").value = me.name;
+      $("phrase").value = me.phrase;
+    }
+  }
+
+  function status(text, kind) {
+    clearTimeout(clearStatus);
+    const el = $("status");
+    el.textContent = text;
+    el.className = "status" + (kind ? " " + kind : "");
+    if (kind === "ok") clearStatus = setTimeout(() => { el.textContent = ""; el.className = "status"; }, 4000);
+  }
+
+  // Who is sending: one tap to switch, so a phone the family shares sends in the right name.
+  function renderPeople() {
+    const box = $("people");
+    box.innerHTML = "";
+    me.names.forEach(n => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (n === me.name ? " on" : "");
+      b.textContent = n;
+      b.addEventListener("click", () => {
+        me.name = n;
+        me.names = addName(me.names, n);
+        save();
+        renderPeople();
+      });
+      box.appendChild(b);
+    });
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "chip add";
+    add.textContent = "+ Someone else";
+    add.addEventListener("click", () => {
+      $("add-person").classList.remove("hide");
+      $("new-name").value = "";
+      $("new-name").focus();
+    });
+    box.appendChild(add);
+  }
+
+  function addPerson() {
+    const n = cleanName($("new-name").value);
+    if (!n) return;
+    me.names = addName(me.names, n);
+    me.name = n;
+    save();
+    $("add-person").classList.add("hide");
+    renderPeople();
+    $("text").focus({ preventScroll: true });
+  }
+
+  function countAndButton() {
+    const n = [...$("text").value].length;
+    $("count").textContent = n + " / " + MAX_TEXT;
+    $("count").classList.toggle("full", n >= MAX_TEXT);
+    $("go").disabled = sending || cleanText($("text").value).length === 0;
+  }
+
+  async function useSetup(phrase, relay) {
+    me.phrase = phrase;
+    me.relay = relay || RELAY_DEFAULT;
+    topic = await topicFor(me.phrase);
+    key = await deriveKey(me.phrase, topic);
+  }
+
+  async function send() {
+    const text = cleanText($("text").value);
+    if (!text || sending) return;
+    sending = true;
+    countAndButton();
+    status("Sending…");
+    try {
+      const payload = await seal(buildMessage(me.name, text, $("important").checked), key);
+      const r = await fetch(me.relay + "/" + topic, { method: "POST", body: payload, headers: { "Content-Type": "text/plain" } });
+      if (!r.ok) throw new Error("the mailbox answered " + r.status);
+      $("text").value = "";
+      $("important").checked = false;
+      // it went to the mailbox; whether the TV showed it is something only the TV knows
+      status("Sent ✓", "ok");
+    } catch (e) {
+      status("Could not reach the mailbox. Check your connection and try again.", "bad");
+    }
+    sending = false;
+    countAndButton();
+  }
+
+  $("text").addEventListener("input", countAndButton);
+  $("text").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); if (!e.shiftKey) send(); }   // one line only: the TV shows no line breaks
+  });
+  $("go").addEventListener("click", send);
+  $("add-ok").addEventListener("click", addPerson);
+  $("new-name").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPerson(); } });
+  $("change").addEventListener("click", e => { e.preventDefault(); show("setup"); });
+
+  $("save").addEventListener("click", async () => {
+    const name = cleanName($("name").value);
+    const phrase = cleanPassphrase($("phrase").value);
+    if (!name) { $("setup-err").textContent = "Please enter your name."; return; }
+    if (!phrase) { $("setup-err").textContent = "The passphrase is " + PHRASE_MIN + " to " + PHRASE_MAX + " characters, the same as on the TV."; return; }
+    $("setup-err").textContent = "";
+    me.name = name;
+    me.names = addName(me.names, name);
+    await useSetup(phrase, me.relay);
+    save();
+    show("send");
+    countAndButton();
+  });
+  $("phrase").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("save").click(); } });
+  $("name").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("phrase").focus(); } });
+
+  // A setup link: the passphrase comes in, then the address bar is cleaned so it is not shared on.
+  async function takeLink(hash) {
+    const fromLink = parseSetup(hash);
+    if (!fromLink) return false;
+    me.phrase = fromLink.p;
+    me.relay = fromLink.r;
+    history.replaceState(null, "", location.pathname + location.search);
+    await useSetup(me.phrase, me.relay);
+    return true;
+  }
+
+  // Opening a setup link while this page is already open only changes the part after the "#", which
+  // does not start the page again: take the new passphrase here instead.
+  window.addEventListener("hashchange", async () => {
+    if (!(await takeLink(location.hash))) return;
+    if (me.name) {
+      save();
+      show("send");
+      countAndButton();
+      status("This phone now uses the new passphrase.", "ok");
+    } else {
+      show("setup");
+    }
+  });
+
+  (async () => {
+    const saved = load();
+    if (saved) me = Object.assign(me, saved);
+    if (!Array.isArray(me.names)) me.names = [];
+    if (me.name) me.names = addName(me.names, me.name);   // a phone set up before there was a list
+    const fromLink = await takeLink(location.hash);
+    if (me.name && me.phrase) {
+      // a setup link has already worked the key out; otherwise do it now
+      if (fromLink) save();
+      else await useSetup(me.phrase, me.relay);
+      show("send");
+      countAndButton();
+    } else {
+      show("setup");
+      ($("name").value ? $("phrase") : $("name")).focus({ preventScroll: true });
+    }
+  })();
+})();
+</script>
+</body>
+</html>
